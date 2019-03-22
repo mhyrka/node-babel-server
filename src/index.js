@@ -1,7 +1,11 @@
 import 'dotenv/config'
 import cors from 'cors'
 import express from 'express'
-import { ApolloServer } from 'apollo-server-express'
+import {
+  ApolloServer,
+  AuthenticationError,
+} from 'apollo-server-express'
+import jwt from 'jsonwebtoken'
 
 import schema from './schema'
 import resolvers from './resolvers'
@@ -10,6 +14,24 @@ import models, { sequelize } from './models'
 const app = express()
 
 app.use(cors())
+
+/**
+ * global authorization that verifies the incoming token
+ * before the request hits the GraphQL resolvers
+ */
+const getMe = async req => {
+  const token = req.headers['x-token']
+
+  if (token) {
+    try {
+      return await jwt.verify(token, process.env.SECRET)
+    } catch (e) {
+      throw new AuthenticationError(
+        'Your session expired. Sign in again.',
+      )
+    }
+  }
+}
 
 const server = new ApolloServer({
   typeDefs: schema,
@@ -26,16 +48,20 @@ const server = new ApolloServer({
       message,
     }
   },
-  context: async () => ({
-    models,
-    me: await models.User.findByLogin('rwieruch'),
-    secret: process.env.SECRET,
-  }),
+  context: async ({ req }) => {
+    const me = await getMe(req)
+
+    return {
+      models,
+      me,
+      secret: process.env.SECRET,
+    }
+  },
 })
 
-const eraseDatabaseOnSync = true
-
 server.applyMiddleware({ app, path: '/graphql' })
+
+const eraseDatabaseOnSync = true
 
 // force: eraseDatabaseOnSync clears DB and reseed on startup.
 // remove if you want to accumulate date in the DB
@@ -51,12 +77,13 @@ sequelize.sync({ force: eraseDatabaseOnSync }).then(async () => {
 const createUsersWithMessages = async () => {
   await models.User.create(
     {
-      username: 'rwieruch',
-      email: 'hello@robin.com',
-      password: 'rwieruch',
+      username: 'hyrkjob',
+      email: 'hyrk@hyrks.com',
+      password: 'hello1234',
+      role: 'ADMIN',
       messages: [
         {
-          text: 'Published the Road to learn React',
+          text: 'Built a goddam award winning app',
         },
       ],
     },

@@ -4,7 +4,6 @@ const user = (sequelize, DataTypes) => {
   const User = sequelize.define('user', {
     username: {
       type: DataTypes.STRING,
-      // Validation
       unique: true,
       allowNull: false,
       validate: {
@@ -27,6 +26,9 @@ const user = (sequelize, DataTypes) => {
         notEmpty: true,
         len: [7, 42],
       },
+    },
+    role: {
+      type: DataTypes.STRING,
     },
   })
 

@@ -1,5 +1,7 @@
 import jwt from 'jsonwebtoken'
+import { combineResolvers } from 'graphql-resolvers'
 import { AuthenticationError, UserInputError } from 'apollo-server'
+import { isAdmin } from './authorization'
 
 /*The first argument to “sign” a token can be any
   user information except sensitive data like passwords,
@@ -12,8 +14,8 @@ import { AuthenticationError, UserInputError } from 'apollo-server'
   access, because it is used to encode (sign) and decode your
   token. */
 const createToken = async (user, secret, expiresIn) => {
-  const { id, email, username } = user
-  return await jwt.sign({ id, email, username }, secret, {
+  const { id, email, username, role } = user
+  return await jwt.sign({ id, email, username, role }, secret, {
     expiresIn,
   })
 }
@@ -24,13 +26,14 @@ export default {
       return await models.User.findAll()
     },
     user: async (parent, { id }, { models }) => {
-      return await models.User.findByPk(id)
+      return await models.User.findById(id)
     },
     me: async (parent, args, { models, me }) => {
       if (!me) {
         return null
       }
-      return await models.User.findByPk(me.id)
+
+      return await models.User.findById(me.id)
     },
   },
 
@@ -45,8 +48,10 @@ export default {
         email,
         password,
       })
-      return { token: createToken(user, secret, '60m') }
+
+      return { token: createToken(user, secret, '30m') }
     },
+
     signIn: async (
       parent,
       { login, password },
@@ -56,7 +61,7 @@ export default {
 
       if (!user) {
         throw new UserInputError(
-          'No user found matching these credentials.',
+          'No user found with this login credentials.',
         )
       }
 
@@ -66,8 +71,17 @@ export default {
         throw new AuthenticationError('Invalid password.')
       }
 
-      return { token: createToken(user, secret, '60m') }
+      return { token: createToken(user, secret, '30m') }
     },
+
+    deleteUser: combineResolvers(
+      isAdmin,
+      async (parent, { id }, { models }) => {
+        return await models.User.destroy({
+          where: { id },
+        })
+      },
+    ),
   },
 
   User: {
