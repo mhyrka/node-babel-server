@@ -1,24 +1,23 @@
 import 'dotenv/config'
 import cors from 'cors'
+import http from 'http'
+import jwt from 'jsonwebtoken'
+import DataLoader from 'dataloader'
 import express from 'express'
 import {
   ApolloServer,
   AuthenticationError,
 } from 'apollo-server-express'
-import jwt from 'jsonwebtoken'
 
 import schema from './schema'
 import resolvers from './resolvers'
 import models, { sequelize } from './models'
+import loaders from './loaders'
 
 const app = express()
 
 app.use(cors())
 
-/**
- * global authorization that verifies the incoming token
- * before the request hits the GraphQL resolvers
- */
 const getMe = async req => {
   const token = req.headers['x-token']
 
@@ -48,33 +47,53 @@ const server = new ApolloServer({
       message,
     }
   },
-  context: async ({ req }) => {
-    const me = await getMe(req)
+  context: async ({ req, connection }) => {
+    if (connection) {
+      return {
+        models,
+        loaders: {
+          user: new DataLoader(keys =>
+            loaders.user.batchUsers(keys, models),
+          ),
+        },
+      }
+    }
 
-    return {
-      models,
-      me,
-      secret: process.env.SECRET,
+    if (req) {
+      const me = await getMe(req)
+
+      return {
+        models,
+        me,
+        secret: process.env.SECRET,
+        loaders: {
+          user: new DataLoader(keys =>
+            loaders.user.batchUsers(keys, models),
+          ),
+        },
+      }
     }
   },
 })
 
 server.applyMiddleware({ app, path: '/graphql' })
 
-const eraseDatabaseOnSync = true
+const httpServer = http.createServer(app)
+server.installSubscriptionHandlers(httpServer)
 
-// force: eraseDatabaseOnSync clears DB and reseed on startup.
-// remove if you want to accumulate date in the DB
-sequelize.sync({ force: eraseDatabaseOnSync }).then(async () => {
-  if (eraseDatabaseOnSync) {
-    createUsersWithMessages()
+const isTest = !!process.env.TEST_DATABASE
+
+sequelize.sync({ force: isTest }).then(async () => {
+  if (isTest) {
+    createUsersWithMessages(new Date())
   }
-  app.listen({ port: 8000 }, () => {
+
+  httpServer.listen({ port: 8000 }, () => {
     console.log('Apollo Server on http://localhost:8000/graphql')
   })
 })
 
-const createUsersWithMessages = async () => {
+const createUsersWithMessages = async date => {
   await models.User.create(
     {
       username: 'hyrkjob',
@@ -84,6 +103,7 @@ const createUsersWithMessages = async () => {
       messages: [
         {
           text: 'Built a goddam award winning app',
+          createdAt: date.setSeconds(date.getSeconds() + 1),
         },
       ],
     },
@@ -100,9 +120,11 @@ const createUsersWithMessages = async () => {
       messages: [
         {
           text: 'Happy to release ...',
+          createdAt: date.setSeconds(date.getSeconds() + 1),
         },
         {
           text: 'Published a complete ...',
+          createdAt: date.setSeconds(date.getSeconds() + 1),
         },
       ],
     },
