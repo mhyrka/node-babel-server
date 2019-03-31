@@ -82,14 +82,16 @@ const httpServer = http.createServer(app)
 server.installSubscriptionHandlers(httpServer)
 
 const isTest = !!process.env.TEST_DATABASE
+const isProduction = !!process.env.DATABASE_URL
+const port = process.env.PORT || 8000
 
-sequelize.sync({ force: isTest }).then(async () => {
-  if (isTest) {
+sequelize.sync({ force: isTest || isProduction }).then(async () => {
+  if (isTest || isProduction) {
     createUsersWithMessages(new Date())
   }
 
-  httpServer.listen({ port: 8000 }, () => {
-    console.log('Apollo Server on http://localhost:8000/graphql')
+  httpServer.listen({ port }, () => {
+    console.log(`Apollo Server on http://localhost:${port}/graphql`)
   })
 })
 
@@ -102,7 +104,7 @@ const createUsersWithMessages = async date => {
       role: 'ADMIN',
       messages: [
         {
-          text: 'Built a goddam award winning app',
+          text: 'Built a great backend application',
           createdAt: date.setSeconds(date.getSeconds() + 1),
         },
       ],

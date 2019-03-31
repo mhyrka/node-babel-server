@@ -1,16 +1,22 @@
 import Sequelize from 'sequelize'
 
-const sequelize = new Sequelize(
-  process.env.TEST_DATABASE || process.env.DATABASE,
-  process.env.DATABASE_USER,
-  process.env.DATABASE_PASSWORD,
-  {
+let sequelize
+if (process.env.DATABASE_URL) {
+  sequelize = new Sequelize(process.env.DATABASE_URL, {
     dialect: 'postgres',
-    // set operatorAliases to false here to avoid deprecation warning.
-    // see more at http://docs.sequelizejs.com/manual/tutorial/querying.html#operators-security
     operatorsAliases: false,
-  },
-)
+  })
+} else {
+  sequelize = new Sequelize(
+    process.env.TEST_DATABASE || process.env.DATABASE,
+    process.env.DATABASE_USER,
+    process.env.DATABASE_PASSWORD,
+    {
+      dialect: 'postgres',
+      operatorsAliases: false,
+    },
+  )
+}
 
 const models = {
   User: sequelize.import('./user'),
